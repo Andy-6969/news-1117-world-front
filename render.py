@@ -52,7 +52,7 @@ def para(x, y, text, f, width, fill=INK, lh=None):
 # ---------- masthead ----------
 d.rectangle([0, 0, W, 8], fill=INK)
 d.text((24, 14), "THE WORLD IN ONE DAY", font=font("arialbd.ttf", 15), fill=RED)
-d.text((W - 24, 14), "23 stories · 6 continents · every item sourced", font=font("ariali.ttf", 15), fill=GREY, anchor="ra")
+d.text((W - 24, 14), "21 numbered stories · 6 continents · every item sourced", font=font("ariali.ttf", 15), fill=GREY, anchor="ra")
 mast = font("georgiab.ttf", 50)
 d.text((W // 2, 36), "Tuesday 17 November 2026", font=mast, fill=INK, anchor="ma")
 d.line([24, 100, W - 24, 100], fill=RULE, width=3)
@@ -122,15 +122,52 @@ def icon_plane(x, y, s):
     d.line([x + 4, y + s - 4, x + s - 4, y + s - 4], fill=GREY, width=2)
 
 
+# ---------- numbered pins and the world map ----------
+import json, os
+PINS = []  # ((lon, lat), number, colour)
+LAND = os.environ.get("LAND_GEOJSON", "land.json")  # Natural Earth 1:110m land (public domain), not committed
+
+
+def badge(cx, cy, n, col, r=8):
+    d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=col, outline="white", width=1)
+    d.text((cx, cy), str(n), font=font("arialbd.ttf", 10 if n > 9 else 11), fill="white", anchor="mm")
+
+
+MX0, MY0, MX1, MY1 = 652, 112, 1000, 256
+LAT_TOP, LAT_BOT = 78, -50
+
+
+def proj(lon, lat):
+    return (MX0 + (lon + 180) / 360 * (MX1 - MX0), MY0 + (LAT_TOP - lat) / (LAT_TOP - LAT_BOT) * (MY1 - MY0))
+
+
+def draw_map():
+    d.rectangle([MX0, MY0, MX1, MY1], fill=(222, 233, 242))
+    for feat in json.load(open(LAND, encoding="utf-8"))["features"]:
+        g = feat["geometry"]
+        polys = g["coordinates"] if g["type"] == "MultiPolygon" else [g["coordinates"]]
+        for poly in polys:
+            pts = [proj(lo, max(min(la, LAT_TOP), LAT_BOT)) for lo, la in poly[0]]
+            if len(pts) > 2:
+                d.polygon(pts, fill=(205, 198, 182), outline=(160, 150, 130))
+    d.rectangle([MX0, MY0, MX1, MY1], outline=GREY, width=1)
+    for (lon, lat), n, col in PINS:
+        x, y = proj(lon, lat)
+        badge(x, y, n, col, r=7)
+    d.text((MX1 - 4, MY1 - 3), "numbers = stories", font=font("ariali.ttf", 10), fill=GREY, anchor="rd")
+
+
 # ---------- lead story ----------
-y0 = 116
-icon_bridge(28, y0 + 6, 120)
-d.text((166, y0), "EUROPE · RUSSIA–UKRAINE WAR", font=font("arialbd.ttf", 14), fill=REG["EUROPE"])
-yy = para(166, y0 + 20, "Ukrainian drones hit the Crimean Bridge for a second day; two killed and traffic shut again",
-          font("georgiab.ttf", 31), W - 166 - 28, lh=36)
-para(166, yy + 4, "Open-source analysts report that a road section damaged the day before has collapsed into the Kerch Strait.  (Reuters; Türkiye Today)",
-     font("georgiai.ttf", 16), W - 166 - 28, fill=GREY)
-d.line([24, 262, W - 24, 262], fill=RULE, width=1)
+y0 = 114
+icon_bridge(26, y0 + 22, 92)
+badge(34, y0 + 8, 1, REG["EUROPE"])
+PINS.append(((36.5, 45.3), 1, REG["EUROPE"]))
+d.text((132, y0), "EUROPE · RUSSIA–UKRAINE WAR", font=font("arialbd.ttf", 13), fill=REG["EUROPE"])
+yy = para(132, y0 + 18, "Ukrainian drones hit the Crimean Bridge for a second day; two killed, traffic shut again",
+          font("georgiab.ttf", 25), 640 - 132, lh=29)
+para(132, yy + 3, "Open-source analysts report that a road section damaged the day before has collapsed into the Kerch Strait.  (Reuters; Türkiye Today)",
+     font("georgiai.ttf", 14), 640 - 132, fill=GREY, lh=17)
+d.line([24, 264, W - 24, 264], fill=RULE, width=1)
 
 # ---------- second tier: four boxes ----------
 tier = [
@@ -144,11 +181,14 @@ tier = [
      "Two weeks after Election Day, the call widens the Democrats' Senate lead.  (AP)"),
 ]
 bw = (W - 48 - 3 * 14) / 4
-by = 274
+by = 276
+TIER_LL = [(55.9, 26.8), (-99.1, 19.4), (106.9, 47.9), (-150.0, 63.0)]
 for i, (ic, kick, head, body) in enumerate(tier):
     bx = 24 + i * (bw + 14)
     ic(bx, by, 58)
     region = kick.split(" · ")[0]
+    badge(bx + 6, by + 6, i + 2, REG[region])
+    PINS.append((TIER_LL[i], i + 2, REG[region]))
     d.text((bx + 66, by + 4), kick.split(" · ")[0], font=font("arialbd.ttf", 12), fill=REG[region])
     d.text((bx + 66, by + 20), kick.split(" · ")[1], font=font("arialbd.ttf", 12), fill=GREY)
     yy = para(bx, by + 66, head, font("georgiab.ttf", 19), bw, lh=22)
@@ -157,63 +197,72 @@ for i, (ic, kick, head, body) in enumerate(tier):
         d.line([bx - 7, by, bx - 7, by + 236], fill=(170, 170, 170), width=1)
 d.line([24, 520, W - 24, 520], fill=RULE, width=2)
 
-# ---------- briefs by region ----------
+# ---------- briefs by region (numbered; the numbers match the map pins) ----------
 briefs = {
     "MIDDLE EAST": [
-        ("Gaza", "Israeli airstrikes kill five Palestinians, including a child.", "AA"),
-        ("West Bank", "Settlers attack homes near Jericho, killing a woman, 72, and injuring ten.", "Al Jazeera"),
+        ("Gaza", "Israeli airstrikes kill five Palestinians, including a child.", "AA", (34.4, 31.4)),
+        ("West Bank", "Settlers attack homes near Jericho, killing a woman, 72, and injuring ten.", "Al Jazeera", (35.4, 32.6)),
     ],
     "EUROPE": [
-        ("Czechia", "Two trains collide in Prague; 46 people injured.", "BBC"),
-        ("Greece / N. Macedonia", "Five arrested over an alleged Iran-linked plot to kill an Israeli executive in Athens.", "AP"),
-        ("UK", "Britain sanctions eight West Bank settlement builders and the group Tzav 9.", "AP"),
+        ("Czechia", "Two trains collide in Prague; 46 people injured.", "BBC", (14.4, 50.1)),
+        ("Greece / N. Macedonia", "Five arrested over an alleged Iran-linked plot to kill an Israeli executive in Athens.", "AP", (21.4, 41.0)),
+        ("UK", "Britain sanctions eight West Bank settlement builders and the group Tzav 9.", "AP", (-1.5, 52.5)),
+    ],
+    "SOUTH ASIA": [
+        ("Bangladesh", "Awami League office burned in Comilla; a worker who filmed BNP clashes is killed in Fatullah.", "TBS; Views Bangladesh", (91.2, 21.5)),
     ],
     "ASIA": [
-        ("Russia", "Air Force An-12 crashes near Kemerovo; all 19 on board killed.", "AP; The Independent"),
-        ("Bangladesh", "Banned Awami League activists storm and burn a police station in Tungipara, freeing detainees.", "The Daily Star"),
-        ("Bangladesh", "Police and border guards use tear gas on garment workers striking for higher pay around Dhaka.", "The Business Standard"),
-        ("Malaysia", "Macron's state visit seals a strategic partnership; limited rare-earth exports to France.", "Reuters"),
-        ("China / Canada", "Xi and Carney agree new tariff cuts ahead of the APEC summit in Shenzhen.", "AFP"),
+        ("Russia", "Air Force An-12 crashes near Kemerovo; all 19 on board killed.", "AP; The Independent", (86.1, 55.3)),
+        ("Bangladesh", "Banned Awami League activists storm and burn a police station in Tungipara, freeing detainees.", "The Daily Star", (88.0, 24.5)),
+        ("Bangladesh", "Police and border guards use tear gas on garment workers striking for higher pay around Dhaka.", "The Business Standard", (91.5, 26.0)),
+        ("Malaysia", "Macron's state visit seals a strategic partnership; limited rare-earth exports to France.", "Reuters", (101.7, 3.1)),
+        ("China / Canada", "Xi and Carney agree new tariff cuts ahead of the APEC summit in Shenzhen.", "AFP", (114.1, 22.5)),
     ],
     "AMERICAS": [
-        ("Costa Rica", "Journalist Camilo Rodríguez shot dead in Heredia, the first such killing in 25 years.", "Univisión"),
-        ("Haiti", "Hundreds march in support of Salvadoran troops fighting gangs.", "Al Jazeera"),
-        ("Tech", "Apple Pay, iCloud and the App Store go down; Apple blames an internal update, not an attack.", "Time"),
+        ("Costa Rica", "Journalist Camilo Rodríguez shot dead in Heredia, the first such killing in 25 years.", "Univisión", (-84.1, 10.0)),
+        ("Haiti", "Hundreds march in support of Salvadoran troops fighting gangs.", "Al Jazeera", (-72.3, 18.5)),
+        ("Tech", "Apple Pay, iCloud and the App Store go down; Apple blames an internal update, not an attack.", "Time", (-122.0, 37.3)),
     ],
     "AFRICA": [
-        ("Guinea", "Court tries 1,000+ illegal gold miners; 22 ex-officials and 202 others jailed.", "DW"),
+        ("Guinea", "Court tries 1,000+ illegal gold miners; 22 ex-officials and 202 others jailed.", "DW", (-11.0, 10.5)),
     ],
     "OCEANIA": [
-        ("Australia", "Racing NSW investigates after Melbourne Cup runner So You Are is found dead in a skip bin.", "Guardian Australia"),
+        ("Australia", "Racing NSW investigates after Melbourne Cup runner So You Are is found dead in a skip bin.", "Guardian Australia", (151.2, -33.9)),
     ],
 }
-cols = [["MIDDLE EAST", "EUROPE"], ["ASIA"], ["AMERICAS", "AFRICA", "OCEANIA"]]
+COLOR = dict(REG, **{"SOUTH ASIA": REG["ASIA"]})
+cols = [["MIDDLE EAST", "EUROPE", "SOUTH ASIA"], ["ASIA"], ["AMERICAS", "AFRICA", "OCEANIA"]]
 cw = (W - 48 - 2 * 20) / 3
-bf, bb, sf = font("arialbd.ttf", 15), font("arial.ttf", 15), font("ariali.ttf", 12)
+bf, bb, sf = font("arialbd.ttf", 14), font("arial.ttf", 14), font("ariali.ttf", 12)
+IND = 22
+num = 6
 for ci, regions in enumerate(cols):
     x = 24 + ci * (cw + 20)
     y = 532
     for r in regions:
-        d.rectangle([x, y, x + cw, y + 20], fill=REG[r])
+        d.rectangle([x, y, x + cw, y + 20], fill=COLOR[r])
         d.text((x + 6, y + 2), r, font=font("arialbd.ttf", 14), fill="white")
-        y += 28
-        for place, text, src in briefs[r]:
+        y += 26
+        for place, text, src, ll in briefs[r]:
+            badge(x + 8, y + 8, num, COLOR[r])
+            PINS.append((ll, num, COLOR[r]))
+            num += 1
             first = place.upper() + " "
-            lines = wrap(first + text, bb, cw - 4)
-            # draw first line with bold place label
-            d.text((x, y), first, font=bf, fill=REG[r])
+            lines = wrap(first + text, bb, cw - IND - 2)
+            d.text((x + IND, y), first, font=bf, fill=COLOR[r])
             off = d.textlength(first, font=bf) + 3
-            rest = lines[0][len(first):]
-            d.text((x + off, y), rest, font=bb, fill=INK)
-            y += 18
+            d.text((x + IND + off, y), lines[0][len(first):], font=bb, fill=INK)
+            y += 17
             for ln in lines[1:]:
-                d.text((x, y), ln, font=bb, fill=INK)
-                y += 18
-            d.text((x, y), "— " + src, font=sf, fill=GREY)
-            y += 22
-        y += 6
+                d.text((x + IND, y), ln, font=bb, fill=INK)
+                y += 17
+            d.text((x + IND, y), "— " + src, font=sf, fill=GREY)
+            y += 19
+        y += 3
     if ci:
         d.line([x - 10, 532, x - 10, 978], fill=(170, 170, 170), width=1)
+
+draw_map()
 
 # ---------- footer ----------
 d.line([24, 984, W - 24, 984], fill=RULE, width=1)
